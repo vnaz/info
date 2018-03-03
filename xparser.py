@@ -1,4 +1,5 @@
 import re
+import io
 
 
 class Token:
@@ -80,12 +81,11 @@ class Rule:
 
 
 class XParser:
-    def __init__(self, filename=None):
-        self.filename = filename
-        self.file = None
+    def __init__(self, source=None, rules=list()):
+        self.source = source
 
         self.handlers = {}
-        self.rules = []
+        self.rules = rules
 
         # @var Token
         self.begin = self.current = self.final = None
@@ -131,24 +131,26 @@ class XParser:
         self.current = self.final
         return self.current
 
-    def parse(self, filename=None):
-        if filename is not None:
-            self.filename = filename
-        self.file = file(self.filename)
+    def parse(self, source=None):
+        if source is not None:
+            self.source = source
+
+        if isinstance(self.source, str):
+            self.source = io.BytesIO(self.source)
 
         char = None
         self.begin = t = self.token(name='lex', value='', start=0, end=0)
         while char != '':
-            char = self.file.read(1)
+            char = self.source.read(1)
             if char in self.split:
                 if len(t.value) > 0:
-                    t = self.token(name='lex', value='', start=t.end, end=t.end)
+                    t = self.token(name='lex', value='', start=t.end+1, end=t.end+1)
                 if char not in self.skip:
                     t.update(value=char, end=t.end+1)
                     t = self.token(name='lex', value='', start=t.end, end=t.end)
             else:
                 t.update(value=t.value+char, end=t.end+1)
-        self.file.close()
+        self.source.close()
 
 
 class Lex(Rule):
@@ -188,23 +190,54 @@ class Seq(Rule):
     def apply(self, token, parser):
         result = token.clone(name=self.name, value=[])
         tmp = None
-        options = [token]
+        tokens = [token]
         for arg in self.args:
-            for option in options:
+            for option in tokens:
+                assert isinstance(arg, Rule)
                 tmp = arg.apply(option, parser)
                 if tmp is not None:
                     break
             if not isinstance(tmp, Token):
                 return None
-            result.value.append(tmp)
-            options = tmp.nearby('left')
+            result.value.insert(0, tmp)
+            tokens = tmp.nearby('left')
         result.left = tmp.left
         result.start = tmp.start
         return result
 
 
-parser = XParser('test.php')
-parser.rules.append(Seq(Lex('<'), Lex('?'), Re('php')))
+class Or(Rule):
+    def apply(self, token, parser):
+        for arg in self.args:
+            assert isinstance(arg, Rule)
+            tmp = arg.apply(token, parser)
+            if isinstance(tmp, Token):
+                return tmp.clone(name=self.name, value=[])
+        return None
+
+
+class And(Rule):
+    def apply(self, token, parser):
+        for arg in self.args:
+            assert isinstance(arg, Rule)
+            tmp = arg.apply(token, parser)
+            if not isinstance(tmp, Token):
+                return None
+        return token.clone(name=self.name, value=[])
+
+
+class Not(Rule):
+    def apply(self, token, parser):
+        for arg in self.args:
+            assert isinstance(arg, Rule)
+            if arg.apply(token, parser) is not None:
+                return None
+        return token.clone(name=self.name, value=[])
+
+
+# parser = XParser(file('test.php'))
+parser = XParser("<?php echo '1';")
+parser.rules.append(Seq(Lex('<'), Lex('?'), Lex('php')))
 parser.split = parser.split.replace('$', '')
 parser.parse()
 for x in parser:
