@@ -54,16 +54,24 @@ class Token:
             else:
                 setattr(self, side, token)
 
-    def nearby(self, side='right'):
+    def forward(self, side, single=False):
+        result = []
         value = getattr(self, side)
         if isinstance(value, list):
-            return value
+            result = value
         elif value is not None:
-            return [value]
-        return []
+            result = [value]
+
+        if single:
+            if len(result) > 0:
+                result = result[0]
+            else:
+                result = None
+
+        return result
 
     def __str__(self):
-        return '%s[%s, %s] - %s' % (self.name, self.start, self.end, self.value)
+        return '%s{%s, %s}: %s' % (self.name, self.start, self.end, self.value)
 
     def __repr__(self):
         return self.__str__()
@@ -105,7 +113,7 @@ class XParser:
         else:
             assert isinstance(self.current, Token)
             result = self.current
-            for token in self.current.nearby('right'):
+            for token in self.current.forward('right'):
                 self.current = token
                 break
             return result
@@ -117,7 +125,7 @@ class XParser:
                 res = rule.apply(self.current, self)
                 if isinstance(res, Token):
                     self.current = res
-                    left = res.nearby('left')
+                    left = res.forward('left')
                     if len(left) == 0:
                         self.begin = self.current = res
                     else:
@@ -200,9 +208,61 @@ class Seq(Rule):
             if not isinstance(tmp, Token):
                 return None
             result.value.insert(0, tmp)
-            tokens = tmp.nearby('left')
+            tokens = tmp.forward('left')
         result.left = tmp.left
         result.start = tmp.start
+        return result
+
+
+class Block(Rule):
+    def __init__(self, start, end, escape=None, mode=None, **params):
+        self.start = start if isinstance(start, Rule) else Lex(start)
+        self.end = end if isinstance(end, Rule) else Lex(end)
+        self.escape = end if isinstance(escape, Rule) else Lex(escape)
+        self.stack = []
+        Rule.__init__(self, **params)
+
+    def apply(self, token, parser):
+        if isinstance(self.escape, Rule):
+            if isinstance(self.escape.apply(token.forward('left', True), parser), Token):
+                return None
+
+        if len(self.stack) > 0:
+            tmp = self.end.apply(token, parser)
+            if isinstance(tmp, Token):
+                begin = self.stack.pop()
+                result = Token(name=self.name, value=[], start=begin.start, end=tmp.end, left=begin.left) # !!!
+                while isinstance(tmp, Token) and tmp != begin:
+                    result.value.insert(0, tmp)
+                    tmp = tmp.forward('left', True)
+                return result
+
+        tmp = self.start.apply(token, parser)
+        if isinstance(tmp, Token):
+            self.stack.append(tmp)
+            return tmp
+
+
+class Repeat(Rule):
+    def __init__(self, rule, min=0, max=0, **params):
+        self.rule = rule if isinstance(rule, Rule) else Lex(rule)
+        self.min = min
+        self.max = max
+        self.previous = None
+        Rule.__init__(self, **params)
+
+    def apply(self, token, parser):
+        result = None
+        cnt = 1
+        tmp = self.rule.apply(token, parser)
+        while isinstance(tmp, Token) and cnt < self.min and self.max > cnt:
+            if tmp.forward('left', True) == self.previous:
+                self.previous.value.append(tmp)
+                self.previous.end = tmp.end
+                return self.previous
+            else:
+                if result is None:
+                    result = Token(name=self.name, value=[tmp], start=tmp.start, end=tmp.end)
         return result
 
 
@@ -235,10 +295,22 @@ class Not(Rule):
         return token.clone(name=self.name, value=[])
 
 
+class Any(Rule):
+    def apply(self, token, parser):
+        return token
+
 # parser = XParser(file('test.php'))
-parser = XParser("<?php echo '1';")
-parser.rules.append(Seq(Lex('<'), Lex('?'), Lex('php')))
-parser.split = parser.split.replace('$', '')
+parser = XParser("""
+<?php if (x == (10 * 22) ) { 
+    echo 'something to test'; 
+}
+""")
+
+parser.rules.append(Seq(Lex('<'), Lex('?'), Lex('php'), name='php'))
+parser.rules.append(Block("'", "'", "\\", name='string'))
+parser.rules.append(Block("{", "}", name='scope'))
+parser.rules.append(Block("(", ")", name='bracket'))
+
 parser.parse()
 for x in parser:
     print x
