@@ -26,7 +26,6 @@ class XFolder:
                 if (regex is not None and regex.match(f)) or \
                         (func is not None and func(f)) or \
                         (search is not None and search in f):
-                    print "%s/%s" % (p, f)
                     result.append(XFile("%s/%s" % (p, f)))
         return result
 
