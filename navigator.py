@@ -8,16 +8,19 @@ from prompt_toolkit.layout.processors import BeforeInput
 from prompt_toolkit.widgets import Dialog, Button, Label, FormattedTextToolbar
 
 buffer = Buffer()
+
 command_buffer = Buffer(
     # accept_handler=handle_action,
     enable_history_search=True,
     # completer=create_command_completer(self),
     # history=commands_history,
     multiline=True)
+
 command_line = Window(
     BufferControl(buffer=command_buffer),
     height=lambda: command_buffer.text.count("\n") + 1,
     get_line_prefix=lambda x, y: ": " if x == 0 else "> ")
+
 status_bar = FormattedTextToolbar("status", style="fg: #000000 bg:#bcbcbc")
 editor = Window(content=BufferControl(buffer=buffer), left_margins=[NumberedMargin()])
 keys = KeyBindings()

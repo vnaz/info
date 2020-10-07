@@ -105,7 +105,9 @@ class ListControl(UIControl):
 
 class Tool:
     def __init__(self):
-        self.list = Window(content=ListControl([str(x*50) for x in range(1, 100)]))
+        list_control = ListControl([str(x*50) for x in range(1, 100)])
+        list_control.mode = 'multi'
+        self.list = Window(content=list_control)
         self.status = Window(content=BufferControl(buffer=Buffer()))
         self.editor = Window(content=BufferControl(buffer=Buffer(), lexer=PygmentsLexer(PythonLexer)),
                              left_margins=[NumberedMargin()])
@@ -118,6 +120,10 @@ class Tool:
         self.editor.content.buffer = x
 
         @self.keys.add('c-q')
+        def key_exit(event):
+            event.app.exit()
+
+        @self.keys.add('f1')
         def key_exit(event):
             event.app.exit()
 
