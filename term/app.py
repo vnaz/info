@@ -1,11 +1,12 @@
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Layout, VSplit, HSplit
+from prompt_toolkit.layout import Layout, VSplit, HSplit, FloatContainer, Float
+from prompt_toolkit.widgets import Dialog, Button, Label
 
-from term.editor import EditorWindow
-from term.list import ListWindow
-from term.status import StatusWindow
+from .editor import EditorWindow
+from .list import ListWindow
+from .status import StatusWindow
 
 class App(Application):
     app = None
@@ -13,7 +14,7 @@ class App(Application):
         if not App.app is None:
             return App.app
 
-        self.list = ListWindow([str(x*50) for x in range(1, 100)])
+        self.list = ListWindow(['test %s' % str(x*50) for x in range(1, 100)])
         self.status = StatusWindow()
         self.editor = EditorWindow()
         self.layout = Layout(HSplit([VSplit([self.list, self.editor]), self.status]))
@@ -27,6 +28,10 @@ class App(Application):
         def key_exit(event):
             event.app.exit()
 
+        @self.keys.add('escape')
+        def key_exit(event):
+            self.confirm_dialog("Are you sure want to exit?", "Quit", event.app.exit)
+
         @self.keys.add('tab')
         def focus_next(event):
             event.app.layout.focus_next()
@@ -35,5 +40,27 @@ class App(Application):
         def focus_previous(event):
             event.app.layout.focus_previous()
 
+        @self.keys.add('f1')
+        def f1(event):
+            self.layout = Layout(self.list)
+
+        @self.keys.add('f2')
+        def f2(event):
+            self.layout = Layout(VSplit([self.list, self.editor]))
+
         super().__init__(key_bindings=self.keys, layout=self.layout, full_screen=True, mouse_support=True)
         App.app = self
+
+    def confirm_dialog(self, message, title='', yes_handler=None):
+        original_layout = self.layout
+
+        def no_handler() -> None:
+            self.layout = original_layout
+
+        dialog = Dialog(
+            title=title,
+            body=Label(text=message, dont_extend_height=True),
+            buttons=[Button(text="Yes", handler=yes_handler), Button(text="No", handler=no_handler)],
+            width=100
+        )
+        self.layout = Layout(FloatContainer(self.layout.container, floats=[Float(dialog.container)]), focused_element=dialog)

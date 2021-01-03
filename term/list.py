@@ -1,17 +1,24 @@
+from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.formatted_text import to_formatted_text, StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import UIControl, UIContent, Window
+from prompt_toolkit.mouse_events import MouseEvent
 
-from term.app import App
 
 class ListControl(UIControl):
-    def __init__(self, collection=[]):
+    def __init__(self, collection:tuple=[]):
         self.collection = collection
+        self.offset = 0
         self.index = 0
+        self.column = 0
+
+        self.labels = []
+        self.columns = [str]
+        self.widths = []
+        self.split = None
+
         self.keys = KeyBindings()
-        self.mode = "list" # multi"
-        self.multi_start = 0
         self.height = 0
         self.width = 0
 
@@ -31,69 +38,83 @@ class ListControl(UIControl):
         def key_down(event):
             self.index = min(self.index + 1, len(self.collection) - 1)
 
-    def move_cursor_down(self) -> None:
-        App.app.layout.focus(self)
-
     def is_focusable(self) -> bool:
         return True
 
     def get_key_bindings(self):
         return self.keys
 
+    def mouse_handler(self, event: MouseEvent) -> "NotImplementedOrNone":
+        get_app().layout.current_control = self
+        self.index = event.position.y
+        if len(self.columns) < len(self.widths):
+            x = 0
+            for i, w in enumerate(self.widths):
+                if x < event.position.x < x + w:
+                    if i > len(self.columns):
+                        self.index += self.height * i
+                        break
+                x += w
+        return super().mouse_handler(event)
+
     def create_content(self, width: int, height: int) -> "UIContent":
         self.height = height
         self.width = width
 
         cursor = Point(0, self.index)
-        lines = height
-        get_line_func = None
+        if len(self.labels) > 0:
+            cursor = Point(0, self.index + 2)
+            self.height -= 2
 
-        if self.mode == 'multi':
-            offset = self.multi_start
-            column_widths = []
-            separator = " | "
+        if not self.split is None:
+            column_width = (width - self.split) // self.split
+            self.widths = [column_width for _ in range(0, self.split)]
+            self.split = None
+        elif len(self.widths) == 0:
+            self.widths = [self.width]
 
-            size = 0
-            while size < width:
-                column_width = 0
-                for i in range(offset, offset + height):
-                    column_width = max(column_width, len(self.collection[i]))
-                offset += height
-                size += column_width + len(separator)
-                column_widths.append(column_width)
+        if self.index < self.offset or self.index > self.offset + (len(self.widths) - len(self.columns) +1) * self.height - 1:
+            self.offset = (self.index // self.height) * self.height
 
-            # extra = " " * (width - (size - column_widths[-1]))
-            # separator = extra + separator
+        def get_line(line: int) -> StyleAndTextTuples:
+            text = to_formatted_text('')
+            for column in range(0, len(self.widths)):
+                index = self.offset + line
+                value = style = ''
+                if len(self.labels) > 0 and line < 2:
+                    if line == 0:
+                        value = self.labels[column] if len(self.labels) > column else self.labels[-1]
+                    else:
+                        value = '-' * self.widths[column]
+                else:
+                    if column > len(self.columns)-1:
+                        index = self.offset + line + self.height * (column - len(self.columns) + 1)
+                        provider = self.columns[-1]
+                    else:
+                        provider = self.columns[column]
 
-            def get_line(line: int) -> StyleAndTextTuples:
-                data = []
-                for c in range(0, len(column_widths)):
-                    text = ""
-                    if c * height + line < len(self.collection):
-                        text += self.collection[c * height + line]
-                    data.append(text.rjust(column_widths[c]))
-                text = separator.join(data)
-                return to_formatted_text(text)
+                    if len(self.labels) > 0:
+                        index -= 2
 
-            get_line_func = get_line
-            cursor = Point(sum([x + len(separator) for x in column_widths[:(self.index-self.multi_start) // height]]),
-                           (self.index-self.multi_start) % height)
-        else:
-            lines = len(self.collection)
-            def get_line(line: int) -> StyleAndTextTuples:
-                text = style = ""
-                if line < len(self.collection):
-                    text = to_formatted_text(self.collection[line])
-                if line == self.index:
-                    style = "bg:#888888 #ffffff"
-                return to_formatted_text(text, style)
+                    if index < len(self.collection):
+                        value = str(provider(self.collection[index]))
 
-            get_line_func = get_line
+                    if index == self.index:
+                        style = 'bg:#888888 #ffffff'
+
+                if len(value) > self.widths[column]:
+                    value = '%s...' % str(value)[0:max(0, self.widths[column]-3)]
+
+                if len(self.widths) > 1:
+                    value = value.rjust(self.widths[column], ' ')
+
+                text += to_formatted_text(' ' if column > 0 else '') + to_formatted_text(value, style)
+            return text
 
         return UIContent(
             cursor_position=cursor,
-            get_line=get_line_func,
-            line_count=lines,
+            get_line=get_line,
+            line_count=height,
         )
 
 class ListWindow(Window):
