@@ -7,7 +7,7 @@ from prompt_toolkit.mouse_events import MouseEvent
 
 
 class ListControl(UIControl):
-    def __init__(self, collection:tuple=[]):
+    def __init__(self, collection=[]):
         self.collection = collection
         self.offset = 0
         self.index = 0
@@ -16,7 +16,7 @@ class ListControl(UIControl):
         self.labels = []
         self.columns = [str]
         self.widths = []
-        self.split = None
+        self.split = 2
 
         self.keys = KeyBindings()
         self.height = 0
@@ -38,6 +38,10 @@ class ListControl(UIControl):
         def key_down(event):
             self.index = min(self.index + 1, len(self.collection) - 1)
 
+        @self.keys.add('enter')
+        def key_down(event):
+            get_app().dialog("Some stuff")
+
     def is_focusable(self) -> bool:
         return True
 
@@ -46,12 +50,12 @@ class ListControl(UIControl):
 
     def mouse_handler(self, event: MouseEvent) -> "NotImplementedOrNone":
         get_app().layout.current_control = self
-        self.index = event.position.y
+        self.index = self.offset + event.position.y
         if len(self.columns) < len(self.widths):
             x = 0
             for i, w in enumerate(self.widths):
                 if x < event.position.x < x + w:
-                    if i > len(self.columns):
+                    if i >= len(self.columns):
                         self.index += self.height * i
                         break
                 x += w
@@ -112,6 +116,7 @@ class ListControl(UIControl):
             return text
 
         return UIContent(
+            show_cursor=False,
             cursor_position=cursor,
             get_line=get_line,
             line_count=height,

@@ -14,7 +14,7 @@ class App(Application):
         if not App.app is None:
             return App.app
 
-        self.list = ListWindow(['test %s' % str(x*50) for x in range(1, 100)])
+        self.list = ListWindow(["test %s" % str(x*50) for x in range(1, 100)])
         self.status = StatusWindow()
         self.editor = EditorWindow()
         self.layout = Layout(HSplit([VSplit([self.list, self.editor]), self.status]))
@@ -30,7 +30,8 @@ class App(Application):
 
         @self.keys.add('escape')
         def key_exit(event):
-            self.confirm_dialog("Are you sure want to exit?", "Quit", event.app.exit)
+            self.dialog("Are you sure want to exit?", "Quit", 'No', None, [
+                Button(text="Yes", handler=event.app.exit)])
 
         @self.keys.add('tab')
         def focus_next(event):
@@ -51,16 +52,18 @@ class App(Application):
         super().__init__(key_bindings=self.keys, layout=self.layout, full_screen=True, mouse_support=True)
         App.app = self
 
-    def confirm_dialog(self, message, title='', yes_handler=None):
+    def dialog(self, message, title='', button_name='OK', button_handler=None, buttons=[]):
         original_layout = self.layout
 
         def no_handler() -> None:
+            if not button_handler is None:
+                button_handler()
             self.layout = original_layout
 
         dialog = Dialog(
             title=title,
             body=Label(text=message, dont_extend_height=True),
-            buttons=[Button(text="Yes", handler=yes_handler), Button(text="No", handler=no_handler)],
+            buttons=buttons + [Button(text=button_name, handler=no_handler)],
             width=100
         )
         self.layout = Layout(FloatContainer(self.layout.container, floats=[Float(dialog.container)]), focused_element=dialog)
