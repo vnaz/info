@@ -49,6 +49,10 @@ class App(Application):
         def f2(event):
             self.layout = Layout(VSplit([self.list, self.editor]))
 
+        @self.keys.add(':')
+        def ctrl_colon(event):
+            event.app.layout.focus(self.status)
+
         super().__init__(key_bindings=self.keys, layout=self.layout, full_screen=True, mouse_support=True)
         App.app = self
 
