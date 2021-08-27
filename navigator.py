@@ -6,6 +6,7 @@ from prompt_toolkit.layout.containers import Window, Float, FloatContainer, Cond
 from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.layout.processors import BeforeInput
 from prompt_toolkit.widgets import Dialog, Button, Label, FormattedTextToolbar
+from term.repl import ReplWindow
 
 buffer = Buffer()
 command_buffer = Buffer(
@@ -19,7 +20,7 @@ command_line = Window(
     height=lambda: command_buffer.text.count("\n") + 1,
     get_line_prefix=lambda x, y: ": " if x == 0 else "> ")
 status_bar = FormattedTextToolbar("status", style="fg: #000000 bg:#bcbcbc")
-editor = Window(content=BufferControl(buffer=buffer), left_margins=[NumberedMargin()])
+editor = ReplWindow()
 keys = KeyBindings()
 layout = Layout(HSplit([VSplit([HSplit([editor, status_bar])]), command_line]))
 app = Application(key_bindings=keys, layout=layout, full_screen=True)
