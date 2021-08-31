@@ -2,11 +2,13 @@ from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import Window, NumberedMargin, BufferControl
+from prompt_toolkit.layout import Window, BufferControl
 from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.mouse_events import MouseEvent
 from pygments.lexers.python import PythonLexer
 from code import InteractiveConsole
+
+from ast import Expression, AST, Expr, parse
 
 class ReplWindow(Window):
 
@@ -31,8 +33,21 @@ class ReplWindow(Window):
         @self.keys.add(Keys.Enter)
         def on_key(event):
             try:
-                self.interpreter.runcode(self.buffer.text)
-                self.console.push()
+                ast = parse(self.buffer.text)
+                expr = None
+                if len(ast.body) == 1 and isinstance(ast.body[0], Expr):
+                    expr = Expression(ast.body[0].value)
+                else:
+                    if len(ast.body) > 1 and hasattr(ast.body[-1], 'value'):
+                        expr = Expression(ast.body[-1].value)
+
+                if expr is None:
+                    exec(self.buffer.text)
+                else:
+                    code = compile(expr, '<input>', 'eval')
+                    val = eval(code)
+                    globals()['_'] = val
+                    self.buffer.text = str(val)
             except Exception as e:
                 self.buffer.text = str(e)
 
